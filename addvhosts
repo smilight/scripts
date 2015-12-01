@@ -1,0 +1,72 @@
+#!/bin/bash
+
+
+WWW_DIR=/var/www/
+HOSTS_FILE=/etc/hosts
+NGINX_CONFIG=/etc/nginx/sites-available/
+NGINX_SITES_ENABLED=/etc/nginx/sites-enabled/
+WEB_SERVER_GROUP=www-data
+WEB_SERVER_USER=www-data
+
+ACTION=$1
+
+if [ -z $2 ]; then
+	echo "No domain name given"
+	exit 1
+fi
+
+DOMAIN=$2
+
+if [ "$ACTION" == "create" ];then
+ 	
+	sudo mkdir $WWW_DIR$DOMAIN
+
+	echo "Folder $WWW_DIR$DOMAIN - created"
+
+	sudo chown -R $WEB_SERVER_USER:$WEB_SERVER_GROUP $WWW_DIR$DOMAIN
+
+	echo "<html><head><title>$DOMAIN</title></head><body><h1>$DOMAIN successfuly created!</h1></body></html>" >> $WWW_DIR$DOMAIN/index.html
+
+	echo "Adding nginx configs..."
+	echo "
+	server {
+		listen   80; ## listen for ipv4; this line is default and implied
+		#listen   [::]:80 default ipv6only=on; ## listen for ipv6
+
+		root $WWW_DIR$DOMAIN;
+		index index.php index.html index.htm;
+
+		# Make site accessible from http://localhost/
+		server_name $DOMAIN;
+	}
+	" >> $NGINX_CONFIG$DOMAIN
+
+	sudo ln -s $NGINX_CONFIG$DOMAIN $NGINX_SITES_ENABLED$DOMAIN
+
+	echo "Setting up permissions..."
+	sudo chmod -R 777 $WWW_DIR$DOMAIN
+
+	echo "Adding $DOMAIN to $HOSTS_FILE..."
+	sudo echo "127.0.0.1    www.$DOMAIN" >> $HOSTS_FILE
+	sudo echo "127.0.0.1    $DOMAIN" >> $HOSTS_FILE
+
+elif [ "$ACTION" = "delete" ];then
+
+	sudo rm -R $WWW_DIR$DOMAIN
+	echo "Folder $WWW_DIR$DOMAIN - removed"
+
+	echo "Removing nginx configs..."
+	sudo rm $NGINX_CONFIG$DOMAIN
+	sudo rm $NGINX_SITES_ENABLED$DOMAIN
+
+	echo "Removing $DOMAIN from $HOSTS_FILE..."
+	sudo sed -i.bak "/$DOMAIN/d" $HOSTS_FILE
+
+else
+	echo "No aciton given"
+	exit 1
+fi
+
+sudo service nginx restart
+
+echo -e "\nSite $ACTION d  for $DOMAIN"
